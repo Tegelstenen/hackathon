@@ -1,4 +1,3 @@
-// app/api/compile-latex/route.ts
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promises as fs } from "fs";
@@ -22,16 +21,17 @@ export async function POST(request: Request) {
 
     // 4. Build the Docker command using the leplusorg/latex image.
     // Mount the temp directory to /tmp in the container.
-    // Note: Adjust user flags if needed; for prototyping, you might omit the `--user` flag.
     const dockerImage = "leplusorg/latex";
     const cmd = `docker run --rm -t --net=none -v ${tempDir}:/tmp ${dockerImage} latexmk -outdir=/tmp -pdf /tmp/main.tex`;
 
     // 5. Execute the Docker command.
     await new Promise<void>((resolve, reject) => {
       exec(cmd, { cwd: tempDir }, (error, stdout, stderr) => {
+        console.log("Docker stdout:", stdout);
+        console.error("Docker stderr:", stderr);
         if (error) {
-          console.error("Compilation error:", stderr);
-          reject(new Error("Compilation failed."));
+          // Pass along the stderr output so the user can see what went wrong.
+          reject(new Error(stderr || "Compilation failed."));
         } else {
           resolve();
         }
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (err: any) {
-    console.error(err);
+    console.error("Error in API route:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

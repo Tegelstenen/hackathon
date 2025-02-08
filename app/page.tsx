@@ -1,23 +1,41 @@
+// app/sign-generator/page.tsx
 "use client";
 
 import { useState } from "react";
-import CompileLatexForm from "@/components/custom/CompileLatexForm";
+import GenerateSignForm from "@/components/custom/GenerateSignForm";
 import PdfViewer from "@/components/custom/PdfViewer";
 
-export default function CompileLatexPage() {
-  // We'll store the PDF URL (created from the blob) in state.
+export default function GenerateSignPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="flex h-screen">
-      {/* Left column: the compile form */}
+      {/* Left column: the sign generator form */}
       <div className="w-1/2 p-4 border-r border-gray-300">
-        <CompileLatexForm onPdfGenerated={setPdfUrl} />
+        <GenerateSignForm
+          onPdfGenerated={(url: string) => {
+            setPdfUrl(url);
+            setLoading(false);
+            setError(null);
+          }}
+          setLoading={setLoading}
+          setError={setError}
+        />
       </div>
 
       {/* Right column: the PDF viewer */}
       <div className="w-1/2 p-4">
-        {pdfUrl ? (
+        {loading ? (
+          <div className="h-full flex items-center justify-center text-gray-500">
+            Loading...
+          </div>
+        ) : error ? (
+          <div className="h-full flex items-center justify-center text-red-500">
+            {error}
+          </div>
+        ) : pdfUrl ? (
           <PdfViewer pdfUrl={pdfUrl} />
         ) : (
           <div className="h-full flex items-center justify-center text-gray-500">

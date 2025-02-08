@@ -22,15 +22,24 @@ type FormValues = z.infer<typeof formSchema>;
 
 type CompileLatexFormProps = {
   onPdfGenerated: (url: string) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
 };
 
-export default function CompileLatexForm({ onPdfGenerated }: CompileLatexFormProps) {
+export default function CompileLatexForm({
+  onPdfGenerated,
+  setLoading,
+  setError,
+}: CompileLatexFormProps) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { snippet: "" },
   });
 
   const onSubmit = async (data: FormValues) => {
+    setLoading(true);
+    setError(null);
+
     try {
       const response = await fetch("/api/compile-latex", {
         method: "POST",
@@ -39,18 +48,21 @@ export default function CompileLatexForm({ onPdfGenerated }: CompileLatexFormPro
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        alert("Error: " + error.error);
+        const errorResponse = await response.json();
+        setError(errorResponse.error || "Compilation failed.");
+        setLoading(false);
         return;
       }
 
-      // Create a blob URL from the fetched PDF
+      // Create a blob URL from the fetched PDF.
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       onPdfGenerated(url);
-    } catch (err) {
+      setLoading(false);
+    } catch (err: any) {
       console.error(err);
-      alert("An unexpected error occurred.");
+      setError("An unexpected error occurred.");
+      setLoading(false);
     }
   };
 
