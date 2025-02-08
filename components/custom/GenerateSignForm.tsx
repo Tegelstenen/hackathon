@@ -33,6 +33,12 @@ const compileFormSchema = z.object({
 });
 type CompileFormValues = z.infer<typeof compileFormSchema>;
 
+// Schema for change suggestions (the new chatbox).
+const updateFormSchema = z.object({
+  changePrompt: z.string().min(5, "Your change suggestion must be at least 5 characters."),
+});
+type UpdateFormValues = z.infer<typeof updateFormSchema>;
+
 // --- Component Props ---
 type GenerateSignFormProps = {
   onPdfGenerated: (url: string) => void;
@@ -70,6 +76,12 @@ export default function GenerateSignForm({
   const compileForm = useForm<CompileFormValues>({
     resolver: zodResolver(compileFormSchema),
     defaultValues: { snippet: generatedLaTeX },
+  });
+
+  // Form for providing update/change suggestions.
+  const updateForm = useForm<UpdateFormValues>({
+    resolver: zodResolver(updateFormSchema),
+    defaultValues: { changePrompt: "" },
   });
 
   // Update the compile form when the generated LaTeX changes.
@@ -189,6 +201,49 @@ export default function GenerateSignForm({
     }
   };
 
+  // Handler for update suggestions submission.
+  const onUpdateSubmit = async (data: UpdateFormValues) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/generate-sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_type: "style_choice",
+          content: data.changePrompt,
+          conversation_id: "0", // Modify as needed.
+        }),
+      });
+  
+      if (!response.ok) {
+        const errorResponse = await response.json();
+        setError(errorResponse.error || "Failed to update LaTeX code.");
+        setLoading(false);
+        return;
+      }
+
+  
+      const result = await response.json();
+      const latexCode = result.content?.[0]?.text;
+      if (!latexCode) {
+        setError("No LaTeX code returned from sign generator.");
+        setLoading(false);
+        return;
+      }
+
+
+      // Save the generated LaTeX and move to the edit phase.
+      setGeneratedLaTeX(latexCode);
+      setStep("edit");
+    } catch (err: any) {
+      console.error(err);
+      setError("An unexpected error occurred during style choice.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- Render ---
   return (
     <div>
@@ -253,7 +308,7 @@ export default function GenerateSignForm({
       )}
 
       {step === "edit" && (
-        <div className="space-y-4">
+        <div className="space-y-8">
           <h2 className="text-xl font-semibold">Edit and Compile LaTeX Code</h2>
           <Form {...compileForm}>
             <form onSubmit={compileForm.handleSubmit(onCompileSubmit)} className="space-y-4">
@@ -277,6 +332,32 @@ export default function GenerateSignForm({
               <Button type="submit">Compile</Button>
             </form>
           </Form>
+
+          <div className="border-t pt-4">
+            <h3 className="text-xl font-semibold">Not Satisfied? Provide Change Suggestions</h3>
+            <Form {...updateForm}>
+              <form onSubmit={updateForm.handleSubmit(onUpdateSubmit)} className="space-y-4">
+                <FormField
+                  control={updateForm.control}
+                  name="changePrompt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Change Suggestion</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="e.g. Adjust the layout, change font size, etc."
+                          {...field}
+                          style={{ minHeight: "100px", width: "100%" }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit">Submit Changes</Button>
+              </form>
+            </Form>
+          </div>
         </div>
       )}
     </div>
