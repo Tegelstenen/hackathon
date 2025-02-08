@@ -36,7 +36,7 @@ export default function GenerateSignPage() {
             {error}
           </div>
         ) : pdfUrl ? (
-          <PdfViewer pdfUrl={pdfUrl} />
+            <PdfViewer pdfUrl={pdfUrl} />
         ) : (
           <div className="h-full flex items-center justify-center text-gray-500">
             Your compiled PDF will appear here.
