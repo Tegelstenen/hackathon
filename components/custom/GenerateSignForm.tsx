@@ -52,23 +52,27 @@ type UpdateFormValues = z.infer<typeof updateFormSchema>;
 type GenerateSignFormProps = {
   onPdfGenerated: (url: string) => void;
   setLoading: (loading: boolean) => void;
-  setLoadingMessage: (message: string | null) => void; // NEW
+  setLoadingMessage: (message: string | null) => void;
   setError: (error: string | null) => void;
 };
 
-// --- Component ---
 export default function GenerateSignForm({
   onPdfGenerated,
   setLoading,
   setLoadingMessage,
   setError,
 }: GenerateSignFormProps) {
-  // Manage our three phases: "initial", "style_choice", "edit"
+  // Which step of the process are we on?
   const [step, setStep] = useState<"initial" | "style_choice" | "edit">(
     "initial"
   );
-  // Holds the suggestion text (styling options and questions)
+
+  // The conversationId returned from the backend. We'll pass it in style/update calls.
+  const [conversationId, setConversationId] = useState<string | null>(null);
+
+  // Holds the suggestion text (styling proposals from step 1).
   const [suggestionText, setSuggestionText] = useState<string>("");
+
   // Holds the generated LaTeX code
   const [generatedLaTeX, setGeneratedLaTeX] = useState<string>("");
 
@@ -85,7 +89,7 @@ export default function GenerateSignForm({
 
   const compileForm = useForm<CompileFormValues>({
     resolver: zodResolver(compileFormSchema),
-    defaultValues: { snippet: generatedLaTeX },
+    defaultValues: { snippet: "" },
   });
 
   const updateForm = useForm<UpdateFormValues>({
@@ -93,12 +97,11 @@ export default function GenerateSignForm({
     defaultValues: { changePrompt: "" },
   });
 
-  // Sync the compile form whenever the generated LaTeX changes
+  // Keep the compile form in sync with the generatedLaTeX
   useEffect(() => {
     compileForm.setValue("snippet", generatedLaTeX);
   }, [generatedLaTeX, compileForm]);
 
-  // --- Handlers ---
   // 1) Initial prompt
   const onInitialSubmit = async (data: InitialFormValues) => {
     setLoading(true);
@@ -122,7 +125,16 @@ export default function GenerateSignForm({
       }
 
       const result = await response.json();
-      const suggestion = result.content?.[0]?.text;
+
+      // Save conversationId from the backend
+      if (!result.conversation_id) {
+        setError("No conversation_id returned from sign generator.");
+        return;
+      }
+      setConversationId(result.conversation_id);
+
+      // The backend returns `content` (a string). Grab it directly.
+      const suggestion = result.content[0].text;
       if (!suggestion) {
         setError("No suggestion returned from sign generator.");
         return;
@@ -141,6 +153,11 @@ export default function GenerateSignForm({
 
   // 2) Style choice
   const onStyleSubmit = async (data: StyleFormValues) => {
+    if (!conversationId) {
+      setError("No conversation ID. Please start over.");
+      return;
+    }
+
     setLoading(true);
     setLoadingMessage("Generating LaTeX code…");
     setError(null);
@@ -152,7 +169,7 @@ export default function GenerateSignForm({
         body: JSON.stringify({
           request_type: "style_choice",
           content: data.styleChoice,
-          conversation_id: "0", // Modify as needed.
+          conversation_id: conversationId,
         }),
       });
 
@@ -163,7 +180,7 @@ export default function GenerateSignForm({
       }
 
       const result = await response.json();
-      const latexCode = result.content?.[0]?.text;
+      const latexCode = result.content[0].text;
       if (!latexCode) {
         setError("No LaTeX code returned from sign generator.");
         return;
@@ -180,7 +197,7 @@ export default function GenerateSignForm({
     }
   };
 
-  // 3) Compile
+  // 3) Compile to PDF
   const onCompileSubmit = async (data: CompileFormValues) => {
     setLoading(true);
     setLoadingMessage("Compiling your PDF…");
@@ -213,18 +230,30 @@ export default function GenerateSignForm({
 
   // 4) Update suggestions
   const onUpdateSubmit = async (data: UpdateFormValues) => {
+    if (!conversationId) {
+      setError("No conversation ID. Please start over.");
+      return;
+    }
+
     setLoading(true);
     setLoadingMessage("Updating LaTeX code…");
     setError(null);
 
     try {
+      // NOTE: The backend expects request_type="update" 
+      // and also expects "request.latex" (the old code).
+      // For simplicity here, we’ll just do style_choice again
+      // if you haven’t updated your backend. 
+      // Or do "update" if you want the new path:
       const response = await fetch("/api/generate-sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          request_type: "style_choice",
+          request_type: "update",
           content: data.changePrompt,
-          conversation_id: "0",
+          conversation_id: conversationId,
+          // The backend requires "latex" for updates:
+          latex: generatedLaTeX,
         }),
       });
 
@@ -235,7 +264,7 @@ export default function GenerateSignForm({
       }
 
       const result = await response.json();
-      const latexCode = result.content?.[0]?.text;
+      const latexCode = result.content[0].text;
       if (!latexCode) {
         setError("No LaTeX code returned from sign generator.");
         return;
@@ -245,7 +274,7 @@ export default function GenerateSignForm({
       setStep("edit");
     } catch (err: any) {
       console.error(err);
-      setError("An unexpected error occurred during style choice.");
+      setError("An unexpected error occurred during update.");
     } finally {
       setLoading(false);
       setLoadingMessage(null);
@@ -257,17 +286,17 @@ export default function GenerateSignForm({
     <Card className="flex flex-col h-full">
       <CardHeader>
         <CardTitle>
-          {step === "initial" && "Step 1: Provide Your communication needs"}
+          {step === "initial" && "Step 1: Provide Your Communication Needs"}
           {step === "style_choice" && "Step 2: Choose a Style"}
           {step === "edit" && "Step 3: Edit & Compile"}
         </CardTitle>
         <CardDescription>
           {step === "initial" &&
-            "Describe what you want your visual communications to convey so we can generate styling suggestions."}
+            "Describe what you want so we can generate styling suggestions."}
           {step === "style_choice" &&
-            "Choose a style based on the suggestions, or enter your own option."}
+            "Choose a style or type your own style instructions."}
           {step === "edit" &&
-            "Review the LaTeX, compile to PDF, or provide more suggestions to update."}
+            "Review or edit the LaTeX, compile to PDF, or make further changes."}
         </CardDescription>
       </CardHeader>
 
@@ -305,8 +334,13 @@ export default function GenerateSignForm({
         {/* STEP 2: STYLE CHOICE */}
         {step === "style_choice" && (
           <>
+            {/* Show the suggestions from the model */}
             <div className="flex flex-col h-full">
-              <Textarea value={suggestionText} readOnly className="resize-none h-full" />
+              <Textarea
+                value={suggestionText}
+                readOnly
+                className="resize-none h-full"
+              />
             </div>
             <Separator />
             <Form {...styleForm}>
@@ -317,19 +351,15 @@ export default function GenerateSignForm({
                     name="styleChoice"
                     render={({ field }) => (
                       <FormItem className="flex-1">
-                        <FormLabel>
-                          Enter your preferred style option:
-                        </FormLabel>
+                        <FormLabel>Enter your preferred style option:</FormLabel>
                         <FormControl>
-                          <Input {...field}/>
+                          <Input {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="submit">
-                    Generate LaTeX
-                  </Button>
+                  <Button type="submit">Generate LaTeX</Button>
                 </div>
               </form>
             </Form>
@@ -339,22 +369,21 @@ export default function GenerateSignForm({
         {/* STEP 3: EDIT & COMPILE */}
         {step === "edit" && (
           <>
-            {/* Large LaTeX code area (similar proportions) */}
+            {/* Large LaTeX code area */}
             <div className="flex flex-col h-full">
               <Form {...compileForm}>
                 <form
                   onSubmit={compileForm.handleSubmit(onCompileSubmit)}
                   className="flex flex-col h-full"
                 >
-                  {/* Expand the text area to fill space */}
                   <FormField
                     control={compileForm.control}
                     name="snippet"
                     render={({ field }) => (
-                      <FormItem className="flex flex-col flex-1 mb-4">
-                        <FormControl className="flex-1">
+                      <FormItem className="flex-1 mb-4">
+                        <FormControl className="h-full">
                           <Textarea
-                            placeholder="Edit your LaTeX code here"
+                            placeholder="Review or tweak your LaTeX code here."
                             className="resize-none h-full"
                             {...field}
                           />
@@ -364,7 +393,6 @@ export default function GenerateSignForm({
                     )}
                   />
 
-                  {/* Single line at the bottom for the button */}
                   <Button type="submit" className="w-full">
                     Compile to PDF
                   </Button>
@@ -374,7 +402,7 @@ export default function GenerateSignForm({
 
             <Separator />
 
-            {/* Single-line form for changes (just like style choice) */}
+            {/* Single-line form for further changes */}
             <Form {...updateForm}>
               <form onSubmit={updateForm.handleSubmit(onUpdateSubmit)}>
                 <div className="flex items-end space-x-2">
@@ -383,19 +411,15 @@ export default function GenerateSignForm({
                     name="changePrompt"
                     render={({ field }) => (
                       <FormItem className="flex-1">
-                        <FormLabel>
-                        Not satisfied? Provide more suggestions:
-                        </FormLabel>
+                        <FormLabel>Need more changes?</FormLabel>
                         <FormControl>
-                        <Input {...field}/>
-                      </FormControl>
+                          <Input {...field} />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="submit">
-                    Submit Changes
-                  </Button>
+                  <Button type="submit">Submit Changes</Button>
                 </div>
               </form>
             </Form>
