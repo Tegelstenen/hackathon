@@ -22,9 +22,9 @@ export async function POST(request: Request) {
     // 4. Build the Docker command using the leplusorg/latex image.
     // Mount the temp directory to /tmp in the container.
     const imagesPath = path.join(process.cwd(), "images");
-
-    const dockerImage = "leplusorg/latex";
-    const cmd = `docker run --rm -t --net=none -v ${tempDir}:/tmp -v ${imagesPath}:/tmp/images ${dockerImage} latexmk -outdir=/tmp -pdf /tmp/main.tex`;
+    const fontsPath = path.join(process.cwd(), "fonts");
+  
+    const cmd = `docker run --rm -t --net=none -v ${tempDir}:/tmp -v ${imagesPath}:/tmp/images -v ${fontsPath}:/tmp/fonts texlive/texlive latexmk -pdfxe -outdir=/tmp /tmp/main.tex`;
 
     // 5. Execute the Docker command.
     await new Promise<void>((resolve, reject) => {
