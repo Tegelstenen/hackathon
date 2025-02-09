@@ -12,6 +12,7 @@
     "@ai-sdk/openai": "^1.1.9",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-label": "^2.1.2",
+    "@radix-ui/react-separator": "^1.1.2",
     "@radix-ui/react-slot": "^1.1.2",
     "ai": "^4.1.26",
     "class-variance-authority": "^0.7.1",
