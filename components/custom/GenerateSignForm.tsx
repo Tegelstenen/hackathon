@@ -24,6 +24,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
+import { RefreshCw } from "lucide-react";
+
 
 // --- Schemas ---
 const initialFormSchema = z.object({
@@ -195,6 +197,23 @@ export default function GenerateSignForm({
       }
     }
   };
+
+  // Helper: reset everything to the initial state
+  const handleRefresh = () => {
+    setStep("initial");
+    setConversationId(null);
+    setSuggestionText("");
+    setGeneratedLaTeX("");
+    setError(null);
+
+    // Reset all forms
+    initialForm.reset();
+    styleForm.reset();
+    compileForm.reset();
+    updateForm.reset();
+  };
+  
+
 
   //
   // STEP 1: Handle "initial" submit
@@ -369,20 +388,45 @@ export default function GenerateSignForm({
   // --- RENDER ---
   return (
     <Card className="flex flex-col h-full">
-      <CardHeader>
-        <CardTitle>
-          {step === "initial" && "Step 1: Provide Your Communication Needs"}
-          {step === "style_choice" && "Step 2: Choose a Style"}
-          {step === "edit" && "Step 3: Review, Edit, or Manually Compile"}
-        </CardTitle>
-        <CardDescription>
-          {step === "initial" &&
-            "Describe what you want so we can generate styling suggestions."}
-          {step === "style_choice" &&
-            "Choose a style or type your own style instructions."}
-          {step === "edit" &&
-            "We will automatically compile. You can still tweak or recompile manually below."}
-        </CardDescription>
+      
+      {/* CardHeader with refresh button at top-right */}
+       {/* Make this relative so we can absolutely place the refresh button */}
+       <CardHeader className="relative">
+        {/* The borderless, tangential Refresh button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleRefresh}
+          // Make this a "group" so the icon can detect hover state
+          className="
+            absolute
+            top-0
+            right-0
+            group
+            hover:bg-transparent
+            active:bg-transparent
+            focus-visible:bg-transparent
+          "
+        >
+          {/* The icon will rotate 180 degrees on hover */}
+          <RefreshCw className="h-4 w-4 transition-transform duration-300 group-hover:rotate-180" />
+        </Button>
+        {/* Title and description on the left */}
+        <div>
+          <CardTitle>
+            {step === "initial" && "Step 1: Provide Your Communication Needs"}
+            {step === "style_choice" && "Step 2: Choose a Style"}
+            {step === "edit" && "Step 3: Review, Edit, or Manually Compile"}
+          </CardTitle>
+          <CardDescription>
+            {step === "initial" &&
+              "Describe what you want so we can generate styling suggestions."}
+            {step === "style_choice" &&
+              "Choose a style or type your own style instructions."}
+            {step === "edit" &&
+              "We will automatically compile. You can still tweak or recompile manually below."}
+          </CardDescription>
+        </div>
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col space-y-6">
