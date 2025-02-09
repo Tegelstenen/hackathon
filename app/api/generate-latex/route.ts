@@ -1,4 +1,4 @@
-// /app/api/generate-sign/route.ts
+// /app/api/generate-latex/route.ts
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -6,8 +6,8 @@ export async function POST(request: Request) {
     // Read the incoming payload.
     const payload = await request.json();
 
-    // Forward the payload to the Docker container running the sign-generator.
-    const response = await fetch("http://localhost:8000/generate-sign", {
+    // Forward the payload to the Docker container running the latex-generator.
+    const response = await fetch("http://localhost:8000/generate-latex", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     if (!response.ok) {
       const errorData = await response.json();
       return NextResponse.json(
-        { error: errorData.error || "Sign generation failed." },
+        { error: errorData.error || "Latex generation failed." },
         { status: response.status }
       );
     }
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (err: any) {
-    console.error("Error in /api/generate-sign:", err);
+    console.error("Error in /api/generate-latex:", err);
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }

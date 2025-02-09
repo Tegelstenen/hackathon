@@ -2,11 +2,11 @@
 "use client";
 
 import { useState } from "react";
-import GenerateSignForm from "@/components/custom/GenerateSignForm";
+import GenerateLatexForm from "@/components/custom/GenerateLatexForm";
 import PdfViewer from "@/components/custom/PdfViewer";
 import { Loader2 } from "lucide-react";
 
-export default function GenerateSignPage() {
+export default function GenerateVisualPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
@@ -16,7 +16,7 @@ export default function GenerateSignPage() {
     <div className="flex h-screen">
       {/* Left column: full-height, flex layout */}
       <div className="w-1/2 p-4 border-r border-gray-300 flex flex-col h-full">
-        <GenerateSignForm
+        <GenerateLatexForm
           onPdfGenerated={(url: string) => {
             setPdfUrl(url);
             setLoading(false);

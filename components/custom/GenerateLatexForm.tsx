@@ -51,19 +51,19 @@ const updateFormSchema = z.object({
 type UpdateFormValues = z.infer<typeof updateFormSchema>;
 
 // --- Component Props ---
-type GenerateSignFormProps = {
+type GenerateLatexFormProps = {
   onPdfGenerated: (url: string) => void;
   setLoading: (loading: boolean) => void;
   setLoadingMessage: (message: string | null) => void;
   setError: (error: string | null) => void;
 };
 
-export default function GenerateSignForm({
+export default function GenerateLatexForm({
   onPdfGenerated,
   setLoading,
   setLoadingMessage,
   setError,
-}: GenerateSignFormProps) {
+}: GenerateLatexFormProps) {
   // Step of the process
   const [step, setStep] = useState<"initial" | "style_choice" | "edit">(
     "initial"
@@ -157,7 +157,7 @@ export default function GenerateSignForm({
           // Otherwise, ask the AI to fix it automatically
           const updatePrompt = `Fix the LaTeX code given this compiler error:\n\n${compilerError}`;
 
-          const updateResponse = await fetch("/api/generate-sign", {
+          const updateResponse = await fetch("/api/generate-latex", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -180,7 +180,7 @@ export default function GenerateSignForm({
           const updatedLatex = updateResult.content[0].text;
 
           if (!updatedLatex) {
-            setError("No updated LaTeX code returned from sign generator.");
+            setError("No updated LaTeX code returned from latex generator.");
             break;
           }
 
@@ -224,7 +224,7 @@ export default function GenerateSignForm({
     setError(null);
 
     try {
-      const response = await fetch("/api/generate-sign", {
+      const response = await fetch("/api/generate-latex", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -241,7 +241,7 @@ export default function GenerateSignForm({
 
       const result = await response.json();
       if (!result.conversation_id) {
-        setError("No conversation_id returned from sign generator.");
+        setError("No conversation_id returned from latex generator.");
         return;
       }
 
@@ -249,7 +249,7 @@ export default function GenerateSignForm({
 
       const suggestion = result.content[0].text;
       if (!suggestion) {
-        setError("No suggestion returned from sign generator.");
+        setError("No suggestion returned from latex generator.");
         return;
       }
 
@@ -278,7 +278,7 @@ export default function GenerateSignForm({
     setError(null);
 
     try {
-      const response = await fetch("/api/generate-sign", {
+      const response = await fetch("/api/generate-latex", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -297,7 +297,7 @@ export default function GenerateSignForm({
       const result = await response.json();
       const latexCode = result.content[0].text;
       if (!latexCode) {
-        setError("No LaTeX code returned from sign generator.");
+        setError("No LaTeX code returned from latex generator.");
         return;
       }
 
@@ -346,7 +346,7 @@ export default function GenerateSignForm({
     setError(null);
 
     try {
-      const response = await fetch("/api/generate-sign", {
+      const response = await fetch("/api/generate-latex", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -366,7 +366,7 @@ export default function GenerateSignForm({
       const result = await response.json();
       const latexCode = result.content[0].text;
       if (!latexCode) {
-        setError("No LaTeX code returned from sign generator.");
+        setError("No LaTeX code returned from latex generator.");
         return;
       }
 
