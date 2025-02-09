@@ -1,54 +1,51 @@
-// \app\page.tsx
 "use client";
 
-import { useState } from "react";
-import GenerateLatexForm from "@/components/custom/GenerateLatexForm";
-import PdfViewer from "@/components/custom/PdfViewer";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
-export default function GenerateVisualPage() {
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const words = ["Documents", "Letters", "Slides", "Posters", "Invitations", "Emails"];
+
+export default function LandingPage() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % words.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <div className="flex h-screen">
-      {/* Left column: full-height, flex layout */}
-      <div className="w-1/2 p-4 border-r border-gray-300 flex flex-col h-full">
-        <GenerateLatexForm
-          onPdfGenerated={(url: string) => {
-            setPdfUrl(url);
-            setLoading(false);
-            setLoadingMessage(null);
-            setError(null);
-          }}
-          setLoading={setLoading}
-          setLoadingMessage={setLoadingMessage}
-          setError={setError}
-        />
+    <div className="flex h-screen flex-col items-center justify-center bg-gray-100">
+      <h1 className="text-6xl font-extrabold mb-4 text-gray-800 tracking-wide drop-shadow-lg">
+        🚀 Prompt to <span className="text-blue-600">Visual Content</span> 🎨
+      </h1>
+
+      {/* Container for the sliding text */}
+      <div className="relative h-8 w-48 overflow-hidden mb-8 text-center text-2xl text-gray-600">
+        <AnimatePresence mode="wait">
+          {/* Use the current word as the key to trigger re-renders in AnimatePresence */}
+          <motion.div
+            key={words[index]}
+            initial={{ x: 50, opacity: 0 }}   // Slide in from right
+            animate={{ x: 0, opacity: 1 }}   // To center
+            exit={{ x: -50, opacity: 0 }}    // Slide out to left
+            transition={{ duration: 0.6, ease: "easeInOut" }}
+            className="absolute w-full"
+          >
+            {words[index]}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      {/* Right column: the PDF viewer or loading state */}
-      <div className="w-1/2 p-4">
-        {loading ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="flex items-center space-x-2 text-gray-600">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>{loadingMessage ?? "Loading..."}</span>
-            </div>
-          </div>
-        ) : error ? (
-          <div className="h-full flex items-center justify-center text-red-500">
-            {error}
-          </div>
-        ) : pdfUrl ? (
-          <PdfViewer pdfUrl={pdfUrl} />
-        ) : (
-          <div className="h-full flex items-center justify-center text-gray-500">
-            Your compiled PDF will appear here.
-          </div>
-        )}
+      <div className="flex space-x-4">
+        <Button className="text-lg px-20 py-10 w-60 h-20" variant="default" onClick={() => window.location.href='/production'}>
+          Use Existing
+        </Button>
+        <Button className="text-lg px-20 py-10 w-60 h-20" variant="outline">
+          Upload
+        </Button>
       </div>
     </div>
   );
