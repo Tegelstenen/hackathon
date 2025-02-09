@@ -24,6 +24,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
+import { RefreshCw } from "lucide-react";
+
 
 // --- Schemas ---
 const initialFormSchema = z.object({
@@ -62,12 +64,12 @@ export default function GenerateSignForm({
   setLoadingMessage,
   setError,
 }: GenerateSignFormProps) {
-  // Which step of the process are we on?
+  // Step of the process
   const [step, setStep] = useState<"initial" | "style_choice" | "edit">(
     "initial"
   );
 
-  // The conversationId returned from the backend. We'll pass it in style/update calls.
+  // conversationId from the backend
   const [conversationId, setConversationId] = useState<string | null>(null);
 
   // Holds the suggestion text (styling proposals from step 1).
@@ -97,12 +99,125 @@ export default function GenerateSignForm({
     defaultValues: { changePrompt: "" },
   });
 
-  // Keep the compile form in sync with the generatedLaTeX
+  // Keep the compile form in sync with our current LaTeX
   useEffect(() => {
     compileForm.setValue("snippet", generatedLaTeX);
   }, [generatedLaTeX, compileForm]);
 
-  // 1) Initial prompt
+  /**
+   * Helper that attempts to compile code, and auto-fixes on error.
+   * We call this any time we get new LaTeX from the server.
+   */
+  const autoCompile = async (snippet: string, conversationId: string) => {
+    setError(null);
+
+    let currentSnippet = snippet;
+    const maxTries = 5; // or remove if you want unlimited tries
+
+    for (let attempt = 0; attempt < maxTries; attempt++) {
+      try {
+        setLoading(true);
+        setLoadingMessage(
+          attempt === 0
+            ? "Compiling your PDF…"
+            : "Fixing errors and re-compiling…"
+        );
+
+        // Try compiling
+        const compileResponse = await fetch("/api/compile-latex", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ snippet: currentSnippet }),
+        });
+
+        if (compileResponse.ok) {
+          // Compilation success!
+          const blob = await compileResponse.blob();
+          const url = window.URL.createObjectURL(blob);
+          onPdfGenerated(url);
+          // Update local snippet in case user wants to see the final version
+          setGeneratedLaTeX(currentSnippet);
+          break;
+        } else {
+          // Compiler error
+          const errorResponse = await compileResponse.json();
+          const compilerError =
+            errorResponse.error || "LaTeX compilation failed.";
+
+          console.warn("Compiler error:", compilerError);
+
+          // If last attempt, just show error
+          if (attempt === maxTries - 1) {
+            setError(
+              `Compilation still failing after ${maxTries} attempts: ${compilerError}`
+            );
+            break;
+          }
+
+          // Otherwise, ask the AI to fix it automatically
+          const updatePrompt = `Fix the LaTeX code given this compiler error:\n\n${compilerError}`;
+
+          const updateResponse = await fetch("/api/generate-sign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              request_type: "update",
+              content: updatePrompt,
+              conversation_id: conversationId,
+              latex: currentSnippet,
+            }),
+          });
+
+          if (!updateResponse.ok) {
+            const updateErrorResp = await updateResponse.json();
+            setError(
+              updateErrorResp.error || "Failed to auto-fix LaTeX code via AI."
+            );
+            break;
+          }
+
+          const updateResult = await updateResponse.json();
+          const updatedLatex = updateResult.content[0].text;
+
+          if (!updatedLatex) {
+            setError("No updated LaTeX code returned from sign generator.");
+            break;
+          }
+
+          // Use the newly fixed snippet for the next attempt
+          currentSnippet = updatedLatex;
+        }
+      } catch (err: any) {
+        console.error(err);
+        setError(`Unexpected error during compilation: ${err.message}`);
+        break;
+      } finally {
+        setLoading(false);
+        setLoadingMessage(null);
+      }
+    }
+  };
+
+  // Helper: reset everything to the initial state
+  const handleRefresh = () => {
+    setStep("initial");
+    setConversationId(null);
+    setSuggestionText("");
+    setGeneratedLaTeX("");
+    setError(null);
+
+    // Reset all forms
+    initialForm.reset();
+    styleForm.reset();
+    compileForm.reset();
+    updateForm.reset();
+  };
+  
+
+
+  //
+  // STEP 1: Handle "initial" submit
+  //
   const onInitialSubmit = async (data: InitialFormValues) => {
     setLoading(true);
     setLoadingMessage("Generating suggestions…");
@@ -125,15 +240,13 @@ export default function GenerateSignForm({
       }
 
       const result = await response.json();
-
-      // Save conversationId from the backend
       if (!result.conversation_id) {
         setError("No conversation_id returned from sign generator.");
         return;
       }
+
       setConversationId(result.conversation_id);
 
-      // The backend returns `content` (a string). Grab it directly.
       const suggestion = result.content[0].text;
       if (!suggestion) {
         setError("No suggestion returned from sign generator.");
@@ -151,7 +264,9 @@ export default function GenerateSignForm({
     }
   };
 
-  // 2) Style choice
+  //
+  // STEP 2: Handle "style_choice" submit
+  //
   const onStyleSubmit = async (data: StyleFormValues) => {
     if (!conversationId) {
       setError("No conversation ID. Please start over.");
@@ -186,49 +301,40 @@ export default function GenerateSignForm({
         return;
       }
 
-      setGeneratedLaTeX(latexCode);
+      // Immediately move to "edit" step
       setStep("edit");
+
+      // *** AUTO-COMPILE RIGHT AWAY ***
+      // we skip manual setGeneratedLaTeX if you want the user to see it only after success
+      // but if you want them to see it in the text area, do so:
+      setGeneratedLaTeX(latexCode);
+
+      // Now call auto-compile
+      await autoCompile(latexCode, conversationId);
     } catch (err: any) {
       console.error(err);
-      setError("An unexpected error occurred during style choice.");
+      setError("An unexpected error occurred while generating LaTeX.");
     } finally {
       setLoading(false);
       setLoadingMessage(null);
     }
   };
 
-  // 3) Compile to PDF
+  //
+  // STEP 3 (Optional): Manual compile button
+  //
   const onCompileSubmit = async (data: CompileFormValues) => {
-    setLoading(true);
-    setLoadingMessage("Compiling your PDF…");
-    setError(null);
-
-    try {
-      const response = await fetch("/api/compile-latex", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snippet: data.snippet }),
-      });
-
-      if (!response.ok) {
-        const errorResponse = await response.json();
-        setError(errorResponse.error || "Compilation failed.");
-        return;
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      onPdfGenerated(url);
-    } catch (err: any) {
-      console.error(err);
-      setError("An unexpected error occurred during compilation.");
-    } finally {
-      setLoading(false);
-      setLoadingMessage(null);
+    // If you want to keep the manual compile button, just call autoCompile here:
+    if (!conversationId) {
+      setError("No conversation ID. Please start over.");
+      return;
     }
+    await autoCompile(data.snippet, conversationId);
   };
 
-  // 4) Update suggestions
+  //
+  // STEP 4: Manual update suggestions -> new LaTeX -> auto-compile
+  //
   const onUpdateSubmit = async (data: UpdateFormValues) => {
     if (!conversationId) {
       setError("No conversation ID. Please start over.");
@@ -240,11 +346,6 @@ export default function GenerateSignForm({
     setError(null);
 
     try {
-      // NOTE: The backend expects request_type="update" 
-      // and also expects "request.latex" (the old code).
-      // For simplicity here, we’ll just do style_choice again
-      // if you haven’t updated your backend. 
-      // Or do "update" if you want the new path:
       const response = await fetch("/api/generate-sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -252,7 +353,6 @@ export default function GenerateSignForm({
           request_type: "update",
           content: data.changePrompt,
           conversation_id: conversationId,
-          // The backend requires "latex" for updates:
           latex: generatedLaTeX,
         }),
       });
@@ -270,8 +370,12 @@ export default function GenerateSignForm({
         return;
       }
 
-      setGeneratedLaTeX(latexCode);
       setStep("edit");
+      // Put the new code into our state for user visibility
+      setGeneratedLaTeX(latexCode);
+
+      // *** AUTO-COMPILE RIGHT AWAY ***
+      await autoCompile(latexCode, conversationId);
     } catch (err: any) {
       console.error(err);
       setError("An unexpected error occurred during update.");
@@ -281,23 +385,48 @@ export default function GenerateSignForm({
     }
   };
 
-  // --- Render ---
+  // --- RENDER ---
   return (
     <Card className="flex flex-col h-full">
-      <CardHeader>
-        <CardTitle>
-          {step === "initial" && "Step 1: Provide Your Communication Needs"}
-          {step === "style_choice" && "Step 2: Choose a Style"}
-          {step === "edit" && "Step 3: Edit & Compile"}
-        </CardTitle>
-        <CardDescription>
-          {step === "initial" &&
-            "Describe what you want so we can generate styling suggestions."}
-          {step === "style_choice" &&
-            "Choose a style or type your own style instructions."}
-          {step === "edit" &&
-            "Review or edit the LaTeX, compile to PDF, or make further changes."}
-        </CardDescription>
+      
+      {/* CardHeader with refresh button at top-right */}
+       {/* Make this relative so we can absolutely place the refresh button */}
+       <CardHeader className="relative">
+        {/* The borderless, tangential Refresh button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleRefresh}
+          // Make this a "group" so the icon can detect hover state
+          className="
+            absolute
+            top-0
+            right-0
+            group
+            hover:bg-transparent
+            active:bg-transparent
+            focus-visible:bg-transparent
+          "
+        >
+          {/* The icon will rotate 180 degrees on hover */}
+          <RefreshCw className="h-4 w-4 transition-transform duration-300 group-hover:rotate-180" />
+        </Button>
+        {/* Title and description on the left */}
+        <div>
+          <CardTitle>
+            {step === "initial" && "Step 1: Provide Your Communication Needs"}
+            {step === "style_choice" && "Step 2: Choose a Style"}
+            {step === "edit" && "Step 3: Review, Edit, or Manually Compile"}
+          </CardTitle>
+          <CardDescription>
+            {step === "initial" &&
+              "Describe what you want so we can generate styling suggestions."}
+            {step === "style_choice" &&
+              "Choose a style or type your own style instructions."}
+            {step === "edit" &&
+              "We will automatically compile. You can still tweak or recompile manually below."}
+          </CardDescription>
+        </div>
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col space-y-6">
@@ -334,7 +463,7 @@ export default function GenerateSignForm({
         {/* STEP 2: STYLE CHOICE */}
         {step === "style_choice" && (
           <>
-            {/* Show the suggestions from the model */}
+            {/* Show the AI suggestions */}
             <div className="flex flex-col h-full">
               <Textarea
                 value={suggestionText}
@@ -369,7 +498,7 @@ export default function GenerateSignForm({
         {/* STEP 3: EDIT & COMPILE */}
         {step === "edit" && (
           <>
-            {/* Large LaTeX code area */}
+            {/* Large LaTeX code area - user can see or tweak */}
             <div className="flex flex-col h-full">
               <Form {...compileForm}>
                 <form
@@ -393,6 +522,7 @@ export default function GenerateSignForm({
                     )}
                   />
 
+                  {/* Optional manual compile button */}
                   <Button type="submit" className="w-full">
                     Compile to PDF
                   </Button>
@@ -402,7 +532,7 @@ export default function GenerateSignForm({
 
             <Separator />
 
-            {/* Single-line form for further changes */}
+            {/* Single-line form for further manual changes */}
             <Form {...updateForm}>
               <form onSubmit={updateForm.handleSubmit(onUpdateSubmit)}>
                 <div className="flex items-end space-x-2">

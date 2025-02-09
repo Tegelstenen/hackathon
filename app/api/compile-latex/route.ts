@@ -1,3 +1,4 @@
+// app/api/compile-latex/route.ts
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promises as fs } from "fs";
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     const imagesPath = path.join(process.cwd(), "images");
     const fontsPath = path.join(process.cwd(), "fonts");
   
-    const cmd = `docker run --rm -t --net=none -v ${tempDir}:/tmp -v ${imagesPath}:/tmp/images -v ${fontsPath}:/tmp/fonts texlive/texlive latexmk -pdfxe -outdir=/tmp /tmp/main.tex`;
+    const cmd = `docker run --rm -i --net=none -v ${tempDir}:/tmp -v ${imagesPath}:/tmp/images -v ${fontsPath}:/tmp/fonts texlive/texlive latexmk -pdfxe -outdir=/tmp -halt-on-error /tmp/main.tex`;
 
     // 5. Execute the Docker command.
     await new Promise<void>((resolve, reject) => {
